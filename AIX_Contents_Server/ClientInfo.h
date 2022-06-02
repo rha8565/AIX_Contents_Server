@@ -17,5 +17,7 @@ public:
 	ClientInfo() = delete;
 	~ClientInfo() = default;
 	string MakeAndGetDisplayData();
+	bool TryJoinClient();
+	void ClientExit();
 
 };

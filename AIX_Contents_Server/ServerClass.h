@@ -7,7 +7,13 @@
 #include <WinSock2.h>
 #include <memory>
 #include <fstream>
+#include <mutex>
+#include <assert.h> 
+#include <chrono>
 #include "ClientInfo.h"
+//#include <string>
+//#include <ctime>
+//#include <cstdio>   
 
 using namespace std;
 typedef unordered_map<string, unique_ptr<ClientInfo>> ClientInfoMap;
@@ -25,7 +31,7 @@ public:
 	void CDKeyFileRead();
 	void RefreshDisplay();
 	void ServerTick();
-	void ClientListenerThread();
+	void ClientListenerThread(SOCKET clientSock);
 	thread& GetServerTickThread();
 	
 

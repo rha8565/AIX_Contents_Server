@@ -22,3 +22,18 @@ string ClientInfo::MakeAndGetDisplayData()
 
 	return displayData;
 }
+
+bool ClientInfo::TryJoinClient()
+{
+	if (mNowConnectNum < mMaxConnectNum)
+	{
+		mNowConnectNum++;
+		return true;
+	}
+	return false;
+}
+
+void ClientInfo::ClientExit()
+{
+	--mNowConnectNum;
+}

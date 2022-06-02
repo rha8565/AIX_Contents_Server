@@ -49,21 +49,27 @@ ServerClass::~ServerClass()
 void ServerClass::CDKeyFileRead()
 {
 	ifstream inFile("CDKey.txt"); // 파일 Read
-	string FBuffer; // 파일 읽기 버퍼
-	string IntBuffer; //정수변환 버퍼
+	string strBuffer; // 파일 읽기 버퍼
+	string strToIntBuffer; //정수변환 버퍼
 	string CDKeyTemp;
 	uint32_t dueDateTemp;
 	uint16_t MaxConnectNumTemp;
 
 	while (inFile.peek() != EOF) {
-		getline(inFile, FBuffer);
-		stringstream SBuffer(FBuffer);
-		SBuffer >> CDKeyTemp;
-		SBuffer >> IntBuffer;
-		dueDateTemp = stoi(IntBuffer);
-		SBuffer >> IntBuffer;
-		MaxConnectNumTemp = stoi(IntBuffer);
-		mCDKeyMap[CDKeyTemp] = make_unique<ClientInfo>(CDKeyTemp, dueDateTemp, MaxConnectNumTemp);
+		getline(inFile, strBuffer);
+		stringstream strStream(strBuffer);
+		strStream >> CDKeyTemp;
+		strStream >> strToIntBuffer;
+		dueDateTemp = stoi(strToIntBuffer);
+		strStream >> strToIntBuffer;
+		MaxConnectNumTemp = stoi(strToIntBuffer);
+		auto rTemp = mCDKeyMap.insert(pair<string, unique_ptr<ClientInfo>>(CDKeyTemp, make_unique<ClientInfo>(CDKeyTemp, dueDateTemp, MaxConnectNumTemp)));
+		if (!(rTemp.second))
+		{
+			cout << "Duplicate CD key cannot exist!!!" << endl;
+			std::this_thread::sleep_for(chrono::seconds(10));
+			exit(0);
+		}
 	}
 	inFile.close();
 }
@@ -94,34 +100,70 @@ void ServerClass::ServerTick()
 			cout << "Accept Error No : " << WSAGetLastError() << endl;
 			return;
 		}
-		thread clientListenThread(&ServerClass::ClientListenerThread, this);
+		thread clientListenThread(&ServerClass::ClientListenerThread, this, clientSock);
 		clientListenThread.detach();
 	}
 }
 
-void ServerClass::ClientListenerThread()
+void ServerClass::ClientListenerThread(SOCKET clientSock)
 {
+	SOCKET cSockTemp = clientSock;
 	string CDKeyTemp;
 	string command;
+	char listenBuffer[64];
+
 	while (1) {
-		char listenBuffer[32];
+		
 		memset(listenBuffer, 0, sizeof(listenBuffer));
-		if (recv(mServerSock, listenBuffer, sizeof(listenBuffer), 0) > 0) {
-			cout << listenBuffer << endl;
+		
+		if (recv(cSockTemp, listenBuffer, sizeof(listenBuffer), 0) > 0) {
+			
 			stringstream bufStream(listenBuffer);
 			bufStream >> CDKeyTemp;
 			bufStream >> command;
-			if (command == "Join") {
 
+			static mutex sMutex;
+			if (command == "Join") 
+			{
+				scoped_lock<mutex> lock(sMutex);
+				auto mapIter = mCDKeyMap.find(CDKeyTemp);
+				if (mapIter == mCDKeyMap.end())
+				{
+					//kick client
+					char sendBuf[] = "Fail";
+					send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+				}else
+				{
+					if (mapIter->second->TryJoinClient())
+					{
+						//join client
+						char sendBuf[] = "Success";
+						send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+						RefreshDisplay();
+					}else
+					{
+						//kick client
+						char sendBuf[] = "Fail";
+						send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+					}
+				}
+			}else if (command == "EXIT") 
+			{
+				scoped_lock<mutex> lock(sMutex);
+				auto mapIter = mCDKeyMap.find(CDKeyTemp);
+				if (mapIter == mCDKeyMap.end())
+				{
+					//bad case
+					closesocket(cSockTemp);
+					return;
+				}else
+				{
+					mapIter->second->ClientExit();
+					RefreshDisplay();
+					closesocket(cSockTemp);
+					return;
+				}
 			}
-			else if (command == "EXIT") {
-
-			}
-			/*if (strcmp(listenBuffer, "Shutdown") == 0) {
-				cout << "Close Socket" << endl;
-				closesocket(sockTemp);
-				return;
-			}*/
 		}
 	}
 }
@@ -129,9 +171,4 @@ void ServerClass::ClientListenerThread()
 thread& ServerClass::GetServerTickThread()
 {
 	return mServerTickThread;
-}
-
-
-void ServerClass() {
-
 }
