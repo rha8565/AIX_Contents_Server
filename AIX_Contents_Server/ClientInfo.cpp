@@ -23,14 +23,19 @@ string ClientInfo::MakeAndGetDisplayData()
 	return displayData;
 }
 
-bool ClientInfo::TryJoinClient()
+int8_t ClientInfo::TryJoinClient(uint32_t accessDate)
 {
-	if (mNowConnectNum < mMaxConnectNum)
-	{
-		mNowConnectNum++;
-		return true;
-	}
-	return false;
+	if (mNowConnectNum >= mMaxConnectNum)
+		return 0;
+	if (mDueDate <= accessDate)
+		return -1;
+	mNowConnectNum += 1;
+	return mNowConnectNum;
+}
+
+uint16_t ClientInfo::GetNowConnectNum()
+{
+	return mNowConnectNum;
 }
 
 void ClientInfo::ClientExit()

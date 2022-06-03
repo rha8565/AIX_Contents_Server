@@ -10,9 +10,8 @@
 #include <mutex>
 #include <assert.h> 
 #include <chrono>
+#include <ctime>
 #include "ClientInfo.h"
-//#include <string>
-//#include <ctime>
 //#include <cstdio>   
 
 using namespace std;
@@ -25,6 +24,8 @@ private:
 	SOCKET mServerSock;
 	WSADATA mWSAData;
 	thread mServerTickThread;
+	ofstream Database;
+
 public:
 	ServerClass();
 	~ServerClass();
@@ -32,6 +33,8 @@ public:
 	void RefreshDisplay();
 	void ServerTick();
 	void ClientListenerThread(SOCKET clientSock);
+	uint32_t GetNowDate();
+	void WriteDatabase(string cdkey, uint32_t date,uint16_t userNum, uint8_t type);
 	thread& GetServerTickThread();
 	
 

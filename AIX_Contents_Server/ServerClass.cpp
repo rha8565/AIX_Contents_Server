@@ -36,7 +36,7 @@ ServerClass::ServerClass()
 		cout << "Listen Error No : " << WSAGetLastError() << endl;
 		return;
 	}
-	
+	Database.open("Database.txt", ios::app);
 	mServerTickThread = thread(&ServerClass::ServerTick, this);
 }
 
@@ -98,7 +98,6 @@ void ServerClass::ServerTick()
 		if (clientSock == INVALID_SOCKET)
 		{
 			cout << "Accept Error No : " << WSAGetLastError() << endl;
-			return;
 		}
 		thread clientListenThread(&ServerClass::ClientListenerThread, this, clientSock);
 		clientListenThread.detach();
@@ -121,51 +120,97 @@ void ServerClass::ClientListenerThread(SOCKET clientSock)
 			stringstream bufStream(listenBuffer);
 			bufStream >> CDKeyTemp;
 			bufStream >> command;
-
+			uint32_t accessDate;
 			static mutex sMutex;
+
 			if (command == "Join") 
 			{
-				scoped_lock<mutex> lock(sMutex);
 				auto mapIter = mCDKeyMap.find(CDKeyTemp);
 				if (mapIter == mCDKeyMap.end())
 				{
-					//kick client
-					char sendBuf[] = "Fail";
+					//kick client CDKey error
+					char sendBuf[] = "Fail_CDKey";
 					send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+					return;
 				}else
 				{
-					if (mapIter->second->TryJoinClient())
+					accessDate = GetNowDate();
+					int16_t errorCode = mapIter->second->TryJoinClient(accessDate);
+					if (errorCode >= 1 )
 					{
 						//join client
 						char sendBuf[] = "Success";
 						send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
-						RefreshDisplay();
-					}else
+						{
+							scoped_lock<mutex> lock(sMutex);
+							WriteDatabase(CDKeyTemp, accessDate, mCDKeyMap[CDKeyTemp]->GetNowConnectNum(), 0);
+							RefreshDisplay();
+						}
+					}else if(errorCode == 0)
 					{
-						//kick client
-						char sendBuf[] = "Fail";
+						//kick client clientNum error
+						char sendBuf[] = "Fail_Max";
 						send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+						return;
+					}
+					else if (errorCode == -1) {
+						//dueDate error
+						char sendBuf[] = "Fail_Date";
+						send(cSockTemp, sendBuf, sizeof(sendBuf), 0);
+						return;
 					}
 				}
 			}else if (command == "EXIT") 
-			{
-				scoped_lock<mutex> lock(sMutex);
+			{				
 				auto mapIter = mCDKeyMap.find(CDKeyTemp);
 				if (mapIter == mCDKeyMap.end())
 				{
 					//bad case
 					closesocket(cSockTemp);
-					return;
 				}else
 				{
 					mapIter->second->ClientExit();
-					RefreshDisplay();
+					accessDate = GetNowDate();
 					closesocket(cSockTemp);
-					return;
+					{
+						scoped_lock<mutex> lock(sMutex);
+						WriteDatabase(CDKeyTemp, accessDate, mCDKeyMap[CDKeyTemp]->GetNowConnectNum(), 1);
+						RefreshDisplay();
+					}
 				}
+				return;
 			}
 		}
 	}
+}
+
+uint32_t ServerClass::GetNowDate()
+{
+	uint32_t nowDate = 0;
+	time_t timer = time(NULL);
+	struct tm* T = localtime(&timer);
+
+	nowDate += (T->tm_year + 1900) * 10000;
+	nowDate += (T->tm_mon + 1) * 100;
+	nowDate += T->tm_mday;
+
+	return nowDate;
+}
+
+// type = 0 is Join type = 1 is EXIT
+void ServerClass::WriteDatabase(string cdkey, uint32_t date, uint16_t userNum, uint8_t type)
+{
+	time_t timer = time(NULL);
+	struct tm* T = localtime(&timer);
+	string insertDate;
+	if (type == 0)
+		insertDate = "*Join*";
+	else
+		insertDate = "*EXIT*";
+
+	insertDate += "  *CDKey : " + cdkey + "  *Date : " + to_string(date) + " " + to_string(T->tm_hour) + " " \
+		+ to_string(T->tm_min) + " " + to_string(T->tm_sec) + "  *User : " + to_string(userNum);
+	Database << insertDate << endl;
 }
 
 thread& ServerClass::GetServerTickThread()

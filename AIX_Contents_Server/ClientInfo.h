@@ -17,7 +17,8 @@ public:
 	ClientInfo() = delete;
 	~ClientInfo() = default;
 	string MakeAndGetDisplayData();
-	bool TryJoinClient();
+	int8_t TryJoinClient(uint32_t accessDate);
+	uint16_t GetNowConnectNum();
 	void ClientExit();
 
 };
